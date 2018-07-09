@@ -1,10 +1,12 @@
+package client
+
 import model._
 import repositories._
 import slick.jdbc.PostgresProfile.api._
 import tables._
 
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Await
+import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 
 object SampleData {

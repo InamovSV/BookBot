@@ -19,10 +19,10 @@ object Main extends App {
   val db = Database.forConfig("postgresql", config)
   val bookRep = new BookRep(db)
   val bookClient = new BookBotAPIClient(bookRep)
+println(BookBotAPIClient.Terms.InTitle())
+  val res = Await.result(bookClient.getBookByKeyWords("fsdfsdfs", 5), 5.seconds)
+  println(res.items.mkString("\n"))
 
-  val res = Await.result(bookClient.getAllUserBooks("Login 1"), 5.seconds)
-  println(res.mkString("\n"))
-
-  //  val res = scala.io.Source.fromURL("https://www.googleapis.com/books/v1/volumes?q=Harry+Potter&fields=items(volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)),totalItems")
-  //  println(res.mkString)
+//    val res = scala.io.Source.fromURL("https://www.googleapis.com/books/v1/volumes?q=Harry+Potter&fields=items(volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)),totalItems")
+//    println(res.mkString)
 }

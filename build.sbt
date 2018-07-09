@@ -49,24 +49,17 @@ lazy val repositories =
       )
     )
 
-lazy val server =
-  Project(id = "server", base = file("server"))
-    .dependsOn(repositories)
-    .settings(akkaSettings:_*)
-
-lazy val client = project.in(file("client"))
-  .dependsOn(server)
+lazy val client = Project(id = "client", base = file("client"))
+  .dependsOn(repositories)
   .settings(akkaSettings:_*)
-//  .settings(libraryDependencies ++= loggingDeps ++ Seq(
-//    "com.typesafe.slick" %% "slick" % "3.2.3",
-//    "com.typesafe.slick" %% "slick-hikaricp" % "3.2.3",
-//    "org.postgresql" % "postgresql" % "42.2.2",
-//    "com.github.tminglei" %% "slick-pg" % "0.16.2"))
 
-lazy val streams = project.in(file("streams"))
+lazy val bot = project.in(file("bot"))
   .dependsOn(client)
-  .settings(akkaSettings:_*)
+  .settings(akkaSettings: _*)
+  .settings(libraryDependencies ++= Seq(
+    "info.mukel" %% "telegrambot4s" % "3.0.14"
+  ))
 
 lazy val root =
   Project("akka-http-workshop", file("."))
-    .aggregate(server, client, streams)
+    .aggregate(bot)

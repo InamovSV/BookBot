@@ -18,7 +18,7 @@ object Main extends App {
   val config = ConfigFactory.load()
   val db = Database.forConfig("postgresql", config)
   val bookRep = new BookRep(db)
-  val bookClient = new BookBotAPIClient(bookRep)
+  val bookClient = new BookBotAPIClient()
 println(BookBotAPIClient.Terms.InTitle())
   val res = Await.result(bookClient.getBookByKeyWords("fsdfsdfs", 5), 5.seconds)
   println(res.items.mkString("\n"))

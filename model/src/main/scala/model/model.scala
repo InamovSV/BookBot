@@ -3,23 +3,23 @@ package model
 import io.circe.generic.JsonCodec
 
 trait HasId {
-  val id: Int
+  val id: Long
 }
 
 @JsonCodec
-case class Author(id: Int, name: String) extends HasId
+case class Author(id: Long, name: String) extends HasId
 
 @JsonCodec
-case class BookAuthoring(authId: Int, bookId: Int)
+case class BookAuthoring(authId: Long, bookId: Long)
 
 @JsonCodec
-case class Book(id: Int,
+case class Book(id: Long,
                 title: String,
                 language: String,
-                description: String,
+                description: Option[String],
                 ref: String,
-                stars: Double,
-                numOfRating: Int) extends HasId
+                stars: Option[Double],
+                numOfRating: Option[Int]) extends HasId
 
 object Book{
   sealed trait Filter
@@ -33,13 +33,13 @@ object Book{
 }
 
 @JsonCodec
-case class Genre(id: Int, title: String) extends HasId
+case class Genre(id: Long, title: String) extends HasId
 
 @JsonCodec
-case class BookGenre(genreId: Int, bookId: Int)
+case class BookGenre(genreId: Long, bookId: Long)
 
 @JsonCodec
-case class User(id: Int, login: String) extends HasId
+case class User(id: Long, login: String) extends HasId
 
 @JsonCodec
-case class BookUser(userId: Int, bookId: Int)
+case class BookUser(userId: Long, bookId: Long)

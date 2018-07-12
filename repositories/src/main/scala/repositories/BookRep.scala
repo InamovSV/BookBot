@@ -31,6 +31,11 @@ class BookRep(val db: Database)(implicit ec: ExecutionContext)
       ).drop)
   }
 
+  private val insertWithIdQuery =
+    BookTable.query returning BookTable.query.map(_.id) into ((item, id) => item.copy(id = id))
+
+  def insertWithId(item: Book): Future[Book] = db.run(insertWithIdQuery += item)
+
   def findAll(): Future[Vector[Book]] = db.run(BookTable.query.to[Vector].result)
 
   def findUserBookByLogin(login: String): Future[Set[Book]] = for(

@@ -4,8 +4,8 @@ import model._
 import slick.jdbc.PostgresProfile.api._
 
 class BookUserTable(tag: Tag) extends Table[BookUser](tag, "book_user"){
-  val bookId = column[Int]("bk_id")
-  val userId = column[Int]("us_id")
+  val bookId = column[Long]("bk_id")
+  val userId = column[Long]("us_id")
 
   def * = (userId, bookId) <> ((BookUser.apply _).tupled, BookUser.unapply)
 

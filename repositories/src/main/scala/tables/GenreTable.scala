@@ -6,8 +6,8 @@ import slick.jdbc.PostgresProfile.api._
 
 class GenreTable(tag: Tag) extends Table[Genre](tag, "genre")
   with BaseTable[Genre] {
-  val id = column[Int]("gen_id", O.PrimaryKey)
-  val title = column[String]("gen_title")
+  val id = column[Long]("gen_id", O.PrimaryKey, O.AutoInc)
+  val title = column[String]("gen_title", O.Unique)
 
   def * = (id, title) <> ((Genre.apply _).tupled, Genre.unapply)
 }

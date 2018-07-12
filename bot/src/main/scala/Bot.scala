@@ -1,6 +1,6 @@
 import java.time.LocalDateTime
 
-import akka.actor.{ActorSystem, Actor, Props}
+import akka.actor.{Actor, ActorSystem, Props}
 import akka.stream.ActorMaterializer
 import client.BookBotAPIClient
 import client.JsonParser
@@ -11,8 +11,9 @@ import info.mukel.telegrambot4s.api.declarative.{Callbacks, Commands}
 import info.mukel.telegrambot4s.api.{Extractors, Polling, TelegramBot}
 import info.mukel.telegrambot4s.methods.{EditMessageReplyMarkup, ParseMode, SendMessage}
 import info.mukel.telegrambot4s.models._
-import repositories.BookRep
+import repositories._
 import slick.jdbc.PostgresProfile.api._
+import tables._
 
 import scala.concurrent.duration._
 import scala.util.Random
@@ -25,7 +26,11 @@ class Bot extends TelegramBot
 
   private val config = ConfigFactory.load()
   private val db = Database.forConfig("postgresql", config)
-  private val rep = new BookRep(db)
+
+  private val bookRep = new BookRep(db)
+  private val userRep = new UserRep(db)
+  private val genreRep = new GenreRep(db)
+  private val authorRep = new AuthorRep(db)
 
   val rand = new Random()
   //  var currentBook:JsonParser.GoogleBooksApiResp
@@ -35,7 +40,7 @@ class Bot extends TelegramBot
     reply("Hi!")
   }
   //////////////////
-  val TAG1 = "addBook_TAG1"
+  val TAG_addBook = "addBook_TAG1"
 
   var requestCount = 0
 
@@ -49,46 +54,92 @@ class Bot extends TelegramBot
       ))
     )
   }
-//ToDo передавать в колбэк ориджин линк к апи и вернуть по ней книгу
-  def addBookInBD(book: JsonParser.GoogleBooksApiResp) = {
+
+  //ToDo передавать в колбэк ориджин линк к апи и вернуть по ней книгу
+  def bookMarkup(book: JsonParser.Book) = {
     Option(InlineKeyboardMarkup.singleColumn(
       Seq(
-        InlineKeyboardButton.callbackData("Next book", tag(book.items.get.head.)),
-        InlineKeyboardButton.callbackData("Add book", tag("0"))
+        InlineKeyboardButton.callbackData("Add book", tag(book.id)
+          //          tag(book.items match {
+          //          case Some(list) if list.nonEmpty => list.head.selfLink
+          //          case _ => "Empty"
+          //        })
+        )
       )))
   }
 
-  def tag = prefixTag(TAG1) _
+  def tag = prefixTag(TAG_addBook) _
 
   onCommand("/counter") { implicit msg =>
     reply("Press to increment!", replyMarkup = markupCounter(0))
   }
 
-  onCallbackWithTag(TAG1) { implicit cbq =>
+  onCallbackWithTag(TAG_addBook) { implicit cbq =>
     // Notification only shown to the user who pressed the button.
-    ackCallback(Option(cbq.from.firstName + " pressed the button!"))
+    ackCallback(Option("The book was added to the read"))
     // Or just ackCallback()
+    implicit val system = ActorSystem("books-client")
+    implicit val materializer = ActorMaterializer()
+    val client = new BookBotAPIClient()
 
     for {
       data <- cbq.data
-      Extractors.Int(n) = data
       msg <- cbq.message
     } /* do */ {
-      println("inlineButton was pressed")
-      request(
-        EditMessageReplyMarkup(
-          Option(ChatId(msg.source)), // msg.chat.id
-          Option(msg.messageId),
-          replyMarkup = markupCounter(n + 1)))
+      client.getBookById(data).foreach{ book =>
+        println(book)
+        val mBook = new model.Book(0,
+          book.volumeInfo.title,
+          book.volumeInfo.language,
+          book.volumeInfo.description,
+          book.volumeInfo.canonicalVolumeLink,
+          book.volumeInfo.averageRating,
+          book.volumeInfo.ratingsCount)
+
+
+          bookRep.insertWithId(mBook).foreach{b =>
+            db.run(BookUserTable.query += model.BookUser(msg.chat.id, b.id))
+
+            book.volumeInfo.authors.getOrElse(List("Unknown author")).foreach{a=>
+              authorRep.insertWithId(model.Author(0, a)).foreach{ar=>
+                db.run(BookAuthoringTable.query += model.BookAuthoring(ar.id, b.id))
+              }
+            }
+            book.volumeInfo.categories.getOrElse(List("Unknown genre")).foreach{g=>
+              genreRep.insertWithId(model.Genre(0,g)).foreach{gr=>
+                db.run(BookGenreTable.query += model.BookGenre(gr.id, b.id))
+              }
+            }
+          }
+      }
+      println("data: " + data)
+      println("msg: " + msg)
     }
   }
-
+  //  for {
+  //          data <- cbq.data
+  //          msg <- cbq.message
+  //        } /* do */ {
+  //          println("inlineButton was pressed")
+  //          EditMessageReplyMarkup(
+  //      Option(ChatId(msg.source)), // msg.chat.id
+  //      Option(msg.messageId),
+  //      replyMarkup = markupCounter(n + 1))
+  //        }
+  //
   //////////////////
+
+  onCommand('start) { implicit message =>
+    reply(s"Привет, юный ${message.chat.firstName.getOrElse("user")}, мимо проходил или по делу?")
+    val chat = message.chat
+    userRep.insert(model.User(chat.id, chat.username.getOrElse("User")))
+  }
+
   onCommand('getbook) { implicit message =>
     implicit val system = ActorSystem("books-client")
     implicit val materializer = ActorMaterializer()
-    //    InlineKeyboardButton()
     val client = new BookBotAPIClient()
+
     withArgs {
       case keys if keys.nonEmpty =>
         println(keys)
@@ -98,9 +149,12 @@ class Bot extends TelegramBot
             client
               .getBookByKeyWords(q, 1)
               .flatMap(book => {
-                println(book)
-                //                currentBook = book
-                reply(book.items.getOrElse(List("Books not found")).mkString("\n"))
+                book.items match {
+                  case Some(books) if books.nonEmpty => reply(book.items.getOrElse(List("Books not found")).mkString("\n"),
+                    replyMarkup = bookMarkup(books.head))
+                  case _ => reply("Book not found")
+                }
+
               })
           case None => reply("Invalid command")
         }
@@ -156,7 +210,7 @@ class Bot extends TelegramBot
   //     implicit val system = ActorSystem("news-client")
   //     implicit val materializer = ActorMaterializer()
   //
-  //     val client = new BookBotAPIClient(rep)
+  //     val client = new BookBotAPIClient(bookRep)
   //     for (text <- msg.text)
   //       request(SendMessage(msg.source, text))
   //   }

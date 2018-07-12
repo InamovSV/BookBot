@@ -4,10 +4,9 @@ import io.circe.generic.JsonCodec
 
 object JsonParser {
 
-//  sealed trait Resp
-  
   @JsonCodec
   case class GoogleBooksApiResp(totalItems: Int, items: Option[List[Book]])
+
 
   //https://www.googleapis.com/books/v1/volumes?q=Harry%20Potter&fields=items(volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)),totalItems
   @JsonCodec
@@ -21,7 +20,7 @@ object JsonParser {
                         canonicalVolumeLink: String)
 
   @JsonCodec
-  case class Book(selfLink: String, volumeInfo: VolumeInfo) {
+  case class Book(id: String, volumeInfo: VolumeInfo) {
     override def toString: String = {
       val genres = volumeInfo.categories match {
         case Some(list) => "\nCategories: " + list.mkString(", ")

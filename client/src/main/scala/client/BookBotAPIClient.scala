@@ -23,7 +23,22 @@ class BookBotAPIClient(implicit system: ActorSystem,
 
   private val http = Http()
   private val fieldsConf =
-    "items(selfLink,volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)),totalItems"
+    "items(id,volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)),totalItems"
+//&fields=id,volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)
+  def getBookById(id: String) = {
+    val req = s"https://www.googleapis.com/books/v1/volumes/$id"
+    println(req)
+    val response = http.singleRequest(
+      HttpRequest(
+        HttpMethods.GET,
+        req
+      )
+    )
+    response.flatMap {
+      case HttpResponse(StatusCodes.OK, _, responseEntity, _) =>
+        Unmarshal(responseEntity).to[JsonParser.Book]
+    }
+  }
 
   def getBookByKeyWords(key: String, maxResults: Int) = {
     val req = s"https://www.googleapis.com/books/v1/volumes?q=$key&maxResults=$maxResults&fields=$fieldsConf"

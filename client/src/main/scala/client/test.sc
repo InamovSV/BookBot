@@ -1,3 +1,6 @@
+import java.net.{URLDecoder, URLEncoder}
+
+import scala.util.Random
 //import akka.NotUsed
 //import akka.actor.ActorSystem
 //import akka.http.scaladsl.Http
@@ -42,9 +45,10 @@
 //  )
 //}
 
-def f(str: String)(n: Int) = str + n
+val list = List("-", "-", "science", "fiction").mkString(", ")
+val parselist = list.split(", ")
 
-def g = f("number ") _
+val list1 = Set(1, 2, 3)
+list1.head
 
-val a = g(1)
 

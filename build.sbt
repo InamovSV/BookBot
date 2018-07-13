@@ -60,6 +60,7 @@ lazy val bot = project.in(file("bot"))
     "info.mukel" %% "telegrambot4s" % "3.0.14"
   ))
 
+
 lazy val root =
   Project("akka-http-workshop", file("."))
     .aggregate(bot)

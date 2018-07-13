@@ -38,15 +38,20 @@ class BookRep(val db: Database)(implicit ec: ExecutionContext)
 
   def findAll(): Future[Vector[Book]] = db.run(BookTable.query.to[Vector].result)
 
-  def findUserBookByLogin(login: String): Future[Set[Book]] = for(
+  def findSimpleUserBooksByLogin(login: Long) = for (
     res <- db.run
     (UserTable.query
-      .filter(_.name === login)
+      .filter(_.id === login)
       .join(BookUserTable.query)
       .on(_.id === _.userId)
       .join(BookTable.query)
       .on(_._2.bookId === _.id)
       .map(_._2)
+      .join(BookAuthoringTable.query)
+      .on(_.id === _.bookId)
+      .join(AuthorTable.query)
+      .on(_._2.authId === _.id)
+      .map(x => (x._1._1.title, x._2.name))
       .result)
   ) yield res.toSet
 }

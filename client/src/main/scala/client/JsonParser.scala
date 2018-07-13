@@ -7,6 +7,8 @@ object JsonParser {
   @JsonCodec
   case class GoogleBooksApiResp(totalItems: Int, items: Option[List[Book]])
 
+  @JsonCodec
+  case class PreGoogleApiResp(totalItems: Int)
 
   //https://www.googleapis.com/books/v1/volumes?q=Harry%20Potter&fields=items(volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)),totalItems
   @JsonCodec

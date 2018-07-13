@@ -23,7 +23,7 @@ class Bot extends TelegramBot
   with Polling
   with Commands
   with Callbacks {
-  def token = "604121505:AAFfz1XrwMUOdY49Ha7DALz7e8-YTVsfsm0"
+  def token = ""
 
   private val config = ConfigFactory.load()
   private val db = Database.forConfig("postgresql", config)

@@ -11,7 +11,11 @@ class GenreRep(val db: Database)(implicit ec: ExecutionContext)
   private val insertWithIdQuery =
     GenreTable.query returning GenreTable.query.map(_.id) into ((item, id) => item.copy(id = id))
 
-  def insertWithId(item: Genre): Future[Genre] = db.run(insertWithIdQuery += item)
+  def insertWithId(item: Genre): Future[Genre] =
+    db.run(GenreTable.query.filter(_.title === item.title).exists.result).flatMap{flag =>
+      if(flag) for(res <- db.run(GenreTable.query.filter(_.title === item.title).result)) yield res.head
+      else db.run(insertWithIdQuery += item)
+    }
 
   def getAllUserGenre(userId: Long) = for(
     res <- db.run(UserTable.query

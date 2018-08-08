@@ -45,10 +45,11 @@ import scala.util.Random
 //  )
 //}
 
-val list = List("-", "-", "science", "fiction").mkString(", ")
-val parselist = list.split(", ")
-
-val list1 = Set(1, 2, 3)
-list1.head
-
+val list: List[Int] = List(1)
+list.headOption.flatMap{ x =>
+  x match {
+    case v => Some(v + 1)
+    case _ => None
+  }
+}
 

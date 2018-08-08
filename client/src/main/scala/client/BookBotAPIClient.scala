@@ -15,6 +15,8 @@ import repositories._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.{Failure, Success, Try}
 
+import scala.collection.mutable.ArrayBuffer
+
 class BookBotAPIClient(implicit system: ActorSystem,
                        materializer: ActorMaterializer,
                        ec: ExecutionContext)
@@ -24,7 +26,7 @@ class BookBotAPIClient(implicit system: ActorSystem,
   private val fieldsConf =
     "items(id,volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)),totalItems"
 //&fields=id,volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)
-  def getBookById(id: String) = {
+  def getBookByLinkId(id: String) = {
     val req = s"https://www.googleapis.com/books/v1/volumes/$id"
     println(req)
     val response = http.singleRequest(
@@ -100,14 +102,13 @@ class BookBotAPIClient(implicit system: ActorSystem,
     listQ match {
       case x::Nil => Some(URLEncoder.encode(x, "UTF-8"))
       case list if list.length <= 4 =>
-        var queries:List[String] = List()
+        val queries: ArrayBuffer[String] = ArrayBuffer()
 
-        if(list.head != "-") queries = URLEncoder.encode(list.head, "UTF-8") :: queries
-        if(list(1) != "-") queries = queries ::: List("inauthor:" + URLEncoder.encode(list(1), "UTF-8"))
-        if(list.isDefinedAt(2) && list(2) != "-") queries = queries ::: List("subject:" + URLEncoder.encode(list(2), "UTF-8"))
+        if(list.head != "-") queries += URLEncoder.encode(list.head, "UTF-8")
+        if(list(1) != "-") queries += ("inauthor:" + URLEncoder.encode(list(1), "UTF-8"))
+        if(list.isDefinedAt(2) && list(2) != "-") queries += ("subject:" + URLEncoder.encode(list(2), "UTF-8"))
         val q3 = if(list.isDefinedAt(3) && list(3) != "-" && list(3).length == 2) "&langRestrict=" + list(3) else ""
 
-        println(q3)
         Some(s"${queries.mkString("+")}$q3")
       case _ => None
     }

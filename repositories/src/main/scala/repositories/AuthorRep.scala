@@ -12,7 +12,20 @@ class AuthorRep(val db: Database)(implicit ec: ExecutionContext)
   private val insertWithIdQuery =
     AuthorTable.query returning AuthorTable.query.map(_.id) into ((item, id) => item.copy(id = id))
 
-  def insertWithId(item: Author): Future[Author] = db.run(insertWithIdQuery += item)
+//  def insertWithId(item: Author): Future[Author] = db.run(insertWithIdQuery += item)
+  def insertWithId(item: Author): Future[Author] =
+    db.run(AuthorTable.query.filter(_.name === item.name).exists.result).flatMap{flag =>
+      if(flag) for(res <- db.run(AuthorTable.query.filter(_.name === item.name).result)) yield res.head
+      else db.run(insertWithIdQuery += item)
+    }
+
+//  def insertWithId(item: Author): Future[Long] = for(
+//    res <- db.run(AuthorTable.query.filter(_.name === item.name).result)
+//  ) yield res.headOption match {
+//    case Some(v) => v.id
+//    case None => for(a <- db.run(insertWithIdQuery += item)) yield a.id
+//  }
+
 
   def getAllUserAuthor(login: Long) = for (
     res <- db.run

@@ -28,7 +28,6 @@ class BookBotAPIClient(implicit system: ActorSystem,
 //&fields=id,volumeInfo(title,authors,description,categories,averageRating,ratingsCount,language,canonicalVolumeLink)
   def getBookByLinkId(id: String) = {
     val req = s"https://www.googleapis.com/books/v1/volumes/$id"
-    println(req)
     val response = http.singleRequest(
       HttpRequest(
         HttpMethods.GET,
@@ -57,7 +56,6 @@ class BookBotAPIClient(implicit system: ActorSystem,
   def getBookByQuery(query: String, maxResults: Int) = {
     val req = s"https://www.googleapis.com/books/v1/volumes?q=$query&maxResults=$maxResults&fields=$fieldsConf"
     println(req)
-
     val response = http.singleRequest(
       HttpRequest(
         HttpMethods.GET,
@@ -77,7 +75,6 @@ class BookBotAPIClient(implicit system: ActorSystem,
       case Subject() => "subject"
     }
     val req = s"https://www.googleapis.com/books/v1/volumes?q=$t:$key&maxResults=$maxResults&fields=$fieldsConf"
-    println(req)
     val response = http.singleRequest(
       HttpRequest(
         HttpMethods.GET,
@@ -98,9 +95,8 @@ class BookBotAPIClient(implicit system: ActorSystem,
 
   def makeQuery(msg: String): Option[String] = {
     val listQ = msg.split(", ").toList
-    println(listQ)
     listQ match {
-      case x::Nil => Some(URLEncoder.encode(x, "UTF-8"))
+      case x::Nil => Option(URLEncoder.encode(x, "UTF-8"))
       case list if list.length <= 4 =>
         val queries: ArrayBuffer[String] = ArrayBuffer()
 
@@ -109,7 +105,7 @@ class BookBotAPIClient(implicit system: ActorSystem,
         if(list.isDefinedAt(2) && list(2) != "-") queries += ("subject:" + URLEncoder.encode(list(2), "UTF-8"))
         val q3 = if(list.isDefinedAt(3) && list(3) != "-" && list(3).length == 2) "&langRestrict=" + list(3) else ""
 
-        Some(s"${queries.mkString("+")}$q3")
+        Option(s"${queries.mkString("+")}$q3")
       case _ => None
     }
   }

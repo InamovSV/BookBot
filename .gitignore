@@ -1,6 +1,6 @@
 *.class
 *.log
-
+token.txt
 .idea
 target
 .DS_Store

@@ -4,9 +4,6 @@ import java.time.LocalDateTime
 import akka.actor.{Actor, ActorSystem, Props}
 import akka.stream.ActorMaterializer
 import client.BookBotAPIClient
-import client.JsonParser
-import client.BookBotAPIClient.Terms
-import client.JsonParser.{Book, VolumeInfo}
 import com.typesafe.config.ConfigFactory
 import info.mukel.telegrambot4s.api.declarative.{Callbacks, Commands}
 import info.mukel.telegrambot4s.api.{Extractors, Polling, TelegramBot}
@@ -17,13 +14,15 @@ import slick.jdbc.PostgresProfile.api._
 import tables._
 
 import scala.concurrent.duration._
-import scala.util.Random
+import scala.io.{Codec, Source}
+import scala.util.{Random, Try}
 
-class Bot extends TelegramBot
+class Bot(botToken: String) extends TelegramBot
   with Polling
   with Commands
   with Callbacks {
-  def token = "604121505:AAFfz1XrwMUOdY49Ha7DALz7e8-YTVsfsm0"
+
+  def token = botToken
 
   private val config = ConfigFactory.load()
   private val db = Database.forConfig("postgresql", config)
@@ -71,78 +70,91 @@ class Bot extends TelegramBot
   val TAG_addBook = "addBook_TAG"
   val TAG_next = "next_TAG"
 
-  def bookMarkup(book: JsonParser.Book = null, n: Int = 0) = {
-    Option(InlineKeyboardMarkup.singleColumn(
-      Seq(
-        InlineKeyboardButton.callbackData("Add book", prefixTag(TAG_addBook)(book.id)),
-        InlineKeyboardButton.callbackData(s"Next n: $n", prefixTag(TAG_next)(n.toString))
-      )
-    ))
-  }
-
-  onCallbackWithTag(TAG_next) { implicit cbq =>
-
-    implicit val system = ActorSystem("books-client")
-    implicit val materializer = ActorMaterializer()
-    val client = new BookBotAPIClient()
-
-    for {
-      data <- cbq.data
-      Extractors.Int(n) = data //Error
-      msg <- cbq.message
-    } /* do */ {
-        request(
-          EditMessageReplyMarkup(
-            Option(ChatId(msg.source)), // msg.chat.id
-            Option(msg.messageId),
-            replyMarkup = bookMarkup(n = n + 1)))
-    }
-  }
-
-  //  def tag = prefixTag(TAG_addBook) _
-
-  onCallbackWithTag(TAG_addBook) { implicit cbq =>
-    // Notification only shown to the user who pressed the button.
-    ackCallback(Option("The book was added to the read"))
-    // Or just ackCallback()
-    implicit val system = ActorSystem("books-client")
-    implicit val materializer = ActorMaterializer()
-    val client = new BookBotAPIClient()
-
-    for {
-      data <- cbq.data
-      msg <- cbq.message
-    } /* do */ {
-      client.getBookByLinkId(data).foreach { book =>
-        println(book)
-        val mBook = model.Book(0,
-          book.volumeInfo.title,
-          book.volumeInfo.language,
-          book.volumeInfo.description,
-          book.volumeInfo.canonicalVolumeLink,
-          book.volumeInfo.averageRating,
-          book.volumeInfo.ratingsCount)
-
-
-        bookRep.insertWithId(mBook).foreach { b =>
-          db.run(BookUserTable.query += model.BookUser(msg.chat.id, b.id))
-
-          book.volumeInfo.authors.getOrElse(List("Unknown author")).foreach { a =>
-            authorRep.insertWithId(model.Author(0, a)).foreach { ar =>
-              db.run(BookAuthoringTable.query += model.BookAuthoring(ar.id, b.id))
-            }
-          }
-          book.volumeInfo.categories.getOrElse(List("Unknown genre")).flatMap(_.split(" / ")).foreach { g =>
-            genreRep.insertWithId(model.Genre(0, g)).foreach { gr =>
-              db.run(BookGenreTable.query += model.BookGenre(gr.id, b.id))
-            }
-          }
-        }
+  var currentQuery:String = ""
+  var n: Int = 0
+  def bookMarkup(bookId: String) = {
+        Option(InlineKeyboardMarkup.singleColumn(
+          Seq(
+            InlineKeyboardButton.callbackData("Add book", prefixTag(TAG_addBook)(bookId)),
+            InlineKeyboardButton.callbackData(s"Next - $n", prefixTag(TAG_next)(bookId))
+          )
+        ))
       }
-      println("data: " + data)
-      println("msg: " + msg)
+
+    onCallbackWithTag(TAG_next) { implicit cbq =>
+
+      implicit val system = ActorSystem("books-client")
+      implicit val materializer = ActorMaterializer()
+      val client = new BookBotAPIClient()
+      n += 1
+      for {
+        data <- cbq.data
+        msg <- cbq.message
+      } /* do */ {
+        currentQuery = currentQuery.replaceAll("startIndex=\\d+","startIndex=" + n)
+        client
+          .getBookByQuery(currentQuery, 1)
+          .flatMap(preBook => preBook.items match {
+            case Some(items) if items.nonEmpty => client.getBookByLinkId(items.head.id)
+              .flatMap{book =>
+                val req = request(
+                  SendMessage(ChatId(msg.source),
+                    rightFormatHTML(book.toString),
+                    Option(ParseMode.HTML),
+                    replyMarkup = bookMarkup(book.id))
+                )
+                req.recover{
+                  case _ => request(SendMessage(ChatId(msg.source), book.toString, replyMarkup = bookMarkup(book.id)))
+                }
+                req
+          }
+            case _ => request(SendMessage(ChatId(msg.source), "Book not found"))
+          })
+      }
     }
-  }
+
+    onCallbackWithTag(TAG_addBook) { implicit cbq =>
+
+      ackCallback(Option("The book was added to the read"))
+
+      implicit val system = ActorSystem("books-client")
+      implicit val materializer = ActorMaterializer()
+      val client = new BookBotAPIClient()
+
+      for {
+        data <- cbq.data
+        msg <- cbq.message
+      } /* do */ {
+        client.getBookByLinkId(data)
+              .foreach { book =>
+                println(book)
+                val mBook = model.Book(0,
+                  book.volumeInfo.title,
+                  book.volumeInfo.language,
+                  book.volumeInfo.description,
+                  book.volumeInfo.canonicalVolumeLink,
+                  book.volumeInfo.averageRating,
+                  book.volumeInfo.ratingsCount)
+
+
+                bookRep.insertWithId(mBook).foreach { b =>
+                  db.run(BookUserTable.query += model.BookUser(msg.chat.id, b.id))
+                  book.volumeInfo.authors.getOrElse(List("Unknown author")).foreach { a =>
+                    authorRep.insertWithId(model.Author(0, a)).foreach { ar =>
+                      db.run(BookAuthoringTable.query += model.BookAuthoring(ar.id, b.id))
+                    }
+                  }
+                  book.volumeInfo.categories.getOrElse(List("Unknown genre")).flatMap(_.split(" / ")).foreach { g =>
+                    genreRep.insertWithId(model.Genre(0, g)).foreach { gr =>
+                      db.run(BookGenreTable.query += model.BookGenre(gr.id, b.id))
+                    }
+                  }
+                }
+              }
+
+      }
+    }
+
   //  for {
   //          data <- cbq.data
   //          msg <- cbq.message
@@ -166,18 +178,26 @@ class Bot extends TelegramBot
     implicit val system = ActorSystem("books-client")
     implicit val materializer = ActorMaterializer()
     val client = new BookBotAPIClient()
-
+    n = 0
     withArgs {
       case keys if keys.nonEmpty =>
-        println(keys)
         client.makeQuery(keys.mkString(" ")) match {
           case Some(q) =>
-            println(q)
+            currentQuery = q + "&startIndex=0"
             client
               .getBookByQuery(q, 1)
               .flatMap(preBook => preBook.items match {
-                case Some(items) if items.nonEmpty => client.getBookByLinkId(items.head.id)
-                  .flatMap(book => reply(book.toString, replyMarkup = bookMarkup(book)))
+                case Some(items) if items.nonEmpty =>
+                  client.getBookByLinkId(items.head.id)
+                  .flatMap{book =>
+                    val req = reply(rightFormatHTML(book.toString),
+                    Option(ParseMode.HTML),
+                    replyMarkup = bookMarkup(book.id))
+                  req.recover{
+                    case _ => reply(book.toString, replyMarkup = bookMarkup(book.id))
+                  }
+                  req
+              }
                 case _ => reply("Book not found")
               })
           case None => reply("Invalid command")
@@ -222,7 +242,8 @@ class Bot extends TelegramBot
                     .getBookByQuery(q + s"&startIndex=${rand.nextInt(resp.totalItems * 2 / 3)}", 1)
                     .flatMap(preBook => preBook.items match {
                       case Some(items) if items.nonEmpty => client.getBookByLinkId(items.head.id)
-                        .flatMap(book => reply(book.toString, replyMarkup = bookMarkup(book)))
+                        .flatMap(book => reply(rightFormatHTML(book.toString),
+                          Option(ParseMode.HTML), replyMarkup = bookMarkup(book.id)))
                       case _ => reply("Book not found")
                     })
                 )
@@ -235,7 +256,8 @@ class Bot extends TelegramBot
                     .getBookByQuery(q + s"&startIndex=${rand.nextInt(resp.totalItems * 2 / 3)}", 1)
                     .flatMap(preBook => preBook.items match {
                       case Some(items) if items.nonEmpty => client.getBookByLinkId(items.head.id)
-                        .flatMap(book => reply(book.toString, replyMarkup = bookMarkup(book)))
+                        .flatMap(book => reply(rightFormatHTML(book.toString),
+                          Option(ParseMode.HTML), replyMarkup = bookMarkup(book.id)))
                       case _ => reply("Book not found")
                     })
                 )
@@ -262,7 +284,8 @@ class Bot extends TelegramBot
                 .getBookByQuery(q + s"&startIndex=${rand.nextInt(resp.totalItems * 2 / 3)}", 1)
                 .flatMap(preBook => preBook.items match {
                   case Some(items) if items.nonEmpty => client.getBookByLinkId(items.head.id)
-                    .flatMap(book => reply(book.toString, replyMarkup = bookMarkup(book)))
+                    .flatMap(book => reply(rightFormatHTML(book.toString),
+                      Option(ParseMode.HTML), replyMarkup = bookMarkup(book.id)))
                   case _ => reply("Book not found")
                 })
             )
@@ -288,7 +311,8 @@ class Bot extends TelegramBot
                 .getBookByQuery(q + s"&startIndex=${rand.nextInt(resp.totalItems * 2 / 3)}", 1)
                 .flatMap(preBook => preBook.items match {
                   case Some(items) if items.nonEmpty => client.getBookByLinkId(items.head.id)
-                    .flatMap(book => reply(book.toString, replyMarkup = bookMarkup(book)))
+                    .flatMap(book => reply(rightFormatHTML(book.toString),
+                      Option(ParseMode.HTML), replyMarkup = bookMarkup(book.id)))
                   case _ => reply("Book not found")
                 })
             )
@@ -311,6 +335,12 @@ class Bot extends TelegramBot
   //    system.scheduler.schedule(5 seconds, 5 seconds){
   //      request(SendMessage("398766533", "Привет!"))
   //    }
+
+  //To Do make more right regex
+  def rightFormatHTML(str: String): String = str
+    .replaceAll("<br>|<p>|<\\/p>", "\n")
+//    .replaceAll("<p>|<\\/p>", "\n")
+
   def time[R](block: => R): R = {
     val t0 = System.nanoTime()
     val result = block // call-by-name

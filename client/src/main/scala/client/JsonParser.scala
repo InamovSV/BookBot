@@ -37,7 +37,7 @@ object JsonParser {
         case None => ""
       }
       val description = volumeInfo.description match {
-        case Some(v) => "\n" + v
+        case Some(v) => "\n" + v.take(3000)
         case None => ""
       }
       val authors = "\n" + s"""by ${volumeInfo.authors.getOrElse(List("unknown authors")).mkString(", ")}"""

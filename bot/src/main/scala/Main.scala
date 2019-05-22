@@ -1,6 +1,9 @@
 import scala.io.Source
 
-object Main extends App{
-  val token = Source.fromResource("token.txt").getLines().mkString
-  val bot = new Bot(token)
+object Main {
+
+  def main(args: Array[String]): Unit = {
+    val token = args.head
+    new Bot(token)
+  }
 }

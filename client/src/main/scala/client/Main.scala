@@ -20,7 +20,8 @@ object Main extends App {
   val config = ConfigFactory.load()
   val db = Database.forConfig("postgresql", config)
   val bookRep = new BookRep(db)
-  val authRep = new AuthorRep(db)
+  bookRep.createSchema()
+//  val authRep = new AuthorRep(db)
 //  authRep.insertWithId(model.Author(0,"Джордж Оруэлл")).foreach(x => println(
 //    s"""--------------------------------------
 //      |${x.id}
@@ -28,7 +29,7 @@ object Main extends App {
 //      |--------------------------------------
 //    """.stripMargin))
 
-  println(Await.result(authRep.insertWithId(model.Author(0,"Джордж Оруэлл")), 3 seconds))
+//  println(Await.result(authRep.insertWithId(model.Author(0,"Джордж Оруэлл")), 3 seconds))
 //bookRep.insertWithId(model.Book(0,"1984", "en", None, "https://market.android.com/details?id=book-uHOGAwAAQBAJ", None, None))
 //  bookRep.getBookByTitle("1984").foreach(println)
 //  bookRep.dropSchema().foreach(_ => bookRep.createSchema())
